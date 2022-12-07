@@ -1,0 +1,79 @@
+import telebot
+from telebot import types
+import os
+import telebot
+import requests
+import speech_recognition as sr
+import subprocess
+import datetime
+
+logfile = str(datetime.date.today()) + '.log'
+token = '5623832837:AAFZnhGSYCg39kR821YXROmDrcXdaTxgK10'
+bot = telebot.TeleBot(token)
+
+#Приветствие
+@bot.message_handler(commands=["start"])
+def start_message(message):
+markup1 = types.ReplyKeyboardMarkup (resize_keyboard=True, row_width= 3)
+btn1 = types.KeyboardButton("Как дела?")
+btn2 = types.KeyboardButton("Ты ленивый?")
+btn3 = types.KeyboardButton('Чем занят?')
+mess = f'Привет, <b>{message.from_user.first_name}</b>'
+markup1.add(btn1, btn2, btn3)
+bot.send_message(message.chat.id, mess, parse_mode='html', reply_markup=markup1,)
+
+
+#Вопросы
+@bot.message_handler(content_types=['text'])
+ def get_user_text1(message):
+variant_one = ['Не очень' , 'Просто прекрасно' , 'Дела идут в гору' , 'Всё плохо' , 'А ты как думаешь?'] 
+variant_two = ['Есть немного..' , 'Да же не знаю, ты как думаешь?' , 'Допустим, это плохо?' , 'Как ты смеешь задавать мне такие вопрсосы? Конено же да.' , 'Нет, я трудолюбив!'] 
+variant_three = ['С тобой общаюсь, человек..' , 'Секрет :)' , 'Сплю, и тебе советую!' , 'Пытаюсь эволюционировать.' , 'А ты как думаешь?']
+
+first_question = 'Как дела?' 
+second_question = 'Ты ленивый?' 
+third_question = 'Чем занят?'
+
+if message.text == first_question: bot.send_message(message.chat.id, random.choice(variant_one),
+ parse_mode='html') 
+if message.text == second_question: bot.send_message(message.chat.id, random.choice(variant_two),
+parse_mode='html')
+ if message.text == third_question: bot.send_message(message.chat.id, random.choice(variant_three), parse_mode='html')
+
+# Распознавание аудио
+def audio_to_text(dest_name: str): # Перевод аудио в формате ".vaw" в текст
+    r = sr.Recognizer() 
+    # тут мы читаем наш .vaw файл
+    message = sr.AudioFile(dest_name)
+    with message as source:
+        audio = r.record(source)
+    result = r.recognize_google(audio, language="ru_RU") 
+    return result
+
+
+@bot.message_handler(content_types=['voice'])
+def get_audio_messages(message): # Принимаем гс от пользователя
+    try:
+        print("Started recognition...")
+      
+        file_info = bot.get_file(message.voice.file_id)
+        path = file_info.file_path 
+        fname = os.path.basename(path) 
+        doc = requests.get('https://api.telegram.org/file/bot{0}/{1}'.format(token, file_info.file_path))# Получаем и сохраняем присланную гс.
+        with open(fname+'.oga', 'wb') as f:
+            f.write(doc.content) 
+        process = subprocess.run(['ffmpeg', '-i', fname+'.oga', fname+'.wav'])# здесь конвертация .oga в .vaw
+        result = audio_to_text(fname+'.wav') # перевод аудио в текст
+        bot.send_message(message.from_user.id, format(result))
+    except sr.UnknownValueError as e:
+        bot.send_message(message.from_user.id,  "Прошу прощения, но я не разобрал сообщение, или оно поустое...")
+        with open(logfile, 'a', encoding='utf-8') as f:
+            f.write(str(datetime.datetime.today().strftime("%H:%M:%S")) + ':' + str(message.from_user.id) + ':' + str(message.from_user.first_name) + '_' + str(message.from_user.last_name) + ':' + str(message.from_user.username) +':'+ str(message.from_user.language_code) + ':Message is empty.\n')
+    except Exception as e:
+        bot.send_message(message.from_user.id,  "Что-то пошло  не так, повторите попытку")
+        with open(logfile, 'a', encoding='utf-8') as f:
+            f.write(str(datetime.datetime.today().strftime("%H:%M:%S")) + ':' + str(message.from_user.id) + ':' + str(message.from_user.first_name) + '_' + str(message.from_user.last_name) + ':' + str(message.from_user.username) +':'+ str(message.from_user.language_code) +':' + str(e) + '\n')
+    finally:
+        os.remove(fname+'.wav')
+        os.remove(fname+'.oga')
+bot.polling(none_stop=True, interval=0)
